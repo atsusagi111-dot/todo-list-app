@@ -19,14 +19,8 @@ services:
         sync: false
       - key: CORS_ORIGIN
         sync: false
-      # プロジェクト招待メールの送信に使用（Gmailの場合はアプリパスワードを使う）
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        value: "587"
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
+      # プロジェクト招待メールの送信に使用（RenderはSMTPポートをブロックするためResend経由で送信）
+      - key: RESEND_API_KEY
         sync: false
       - key: MAIL_FROM
         sync: false
