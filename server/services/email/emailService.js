@@ -1,47 +1,31 @@
 // メール送信機能のエントリーポイント。他の機能（プロジェクト招待など）はこのファイルだけを通して
-// メールを送る。SMTP接続情報はすべて環境変数から読み込み、コードには直書きしない。
-// プロバイダーを変える場合（Gmail・SendGrid・さくらメール等）も、環境変数を書き換えるだけでよい。
-import nodemailer from 'nodemailer';
+// メールを送る。
+// Renderなど一部のホスティング環境は送信SMTP（465/587）への発信そのものをブロックしているため、
+// SMTP直接接続ではなくResendのHTTP API（ポート443）経由で送信する。
 import { EmailConfigError, EmailSendError } from './emailErrors.js';
 
-let cachedTransporter = null;
-
-function getTransporter() {
-  if (cachedTransporter) {
-    return cachedTransporter;
-  }
-  const { SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS } = process.env;
-  if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS) {
-    throw new EmailConfigError(
-      'メール送信設定（SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS）が未設定です'
-    );
-  }
-
-  cachedTransporter = nodemailer.createTransport({
-    host: SMTP_HOST,
-    port: Number(SMTP_PORT),
-    // 465番ポートのみ暗号化接続(SMTPS)。587番などは平文接続後にSTARTTLSで暗号化する。
-    secure: Number(SMTP_PORT) === 465,
-    auth: { user: SMTP_USER, pass: SMTP_PASS },
-    // ホスティング環境（Renderなど）はIPv6の経路を持たないことが多く、smtp.gmail.comの
-    // AAAAレコードに接続しようとしてENETUNREACHになるケースがあるため、IPv4接続を強制する。
-    family: 4,
-    // ホスティング環境によっては送信ポートがブロックされていることがあるため、
-    // 標準のまま（無制限）だと接続がハングし続ける。短めのタイムアウトで打ち切ってエラーにする。
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
-  return cachedTransporter;
-}
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 async function sendMail({ to, subject, text }) {
-  const transporter = getTransporter();
-  const fromAddress = process.env.MAIL_FROM || process.env.SMTP_USER;
-  try {
-    await transporter.sendMail({ from: fromAddress, to, subject, text });
-  } catch (error) {
-    throw new EmailSendError(`メールの送信に失敗しました: ${error.message}`);
+  const { RESEND_API_KEY } = process.env;
+  if (!RESEND_API_KEY) {
+    throw new EmailConfigError('メール送信設定（RESEND_API_KEY）が未設定です');
+  }
+  // 独自ドメインをResendで検証していない場合、送信元は onboarding@resend.dev 固定になる
+  const fromAddress = process.env.MAIL_FROM || 'onboarding@resend.dev';
+
+  const response = await fetch(RESEND_API_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from: fromAddress, to, subject, text }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new EmailSendError(`メールの送信に失敗しました: ${body.message || response.statusText}`);
   }
 }
 

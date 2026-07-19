@@ -25,3 +25,6 @@ dist-ssr
 # Googleサービスアカウントの秘密鍵
 service-account-key.json
 *.service-account.json
+
+# Claude Codeのローカル設定
+.claude/
