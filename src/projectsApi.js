@@ -46,6 +46,13 @@ export function inviteMember(projectId, email) {
   });
 }
 
+export function resendInvitation(projectId, email) {
+  return request(`/api/projects/${projectId}/invitations/resend`, {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
 export function respondToInvitation(projectId, action) {
   return request(`/api/projects/${projectId}/respond`, {
     method: 'POST',

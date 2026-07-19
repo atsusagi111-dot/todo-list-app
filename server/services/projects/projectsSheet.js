@@ -416,6 +416,14 @@ export async function findPendingInvitationsByEmail(email) {
     .filter((inv) => inv.email === email && inv.status === 'pending');
 }
 
+// プロジェクト詳細画面に「未登録者への招待中」一覧を表示するために使う
+export async function findPendingInvitationsByProject(projectId) {
+  const rows = await getAllPendingInvitationRows();
+  return rows
+    .map(rowToPendingInvitation)
+    .filter((inv) => inv.projectId === projectId && inv.status === 'pending');
+}
+
 // 登録待ち招待を「消費済み」にする（ProjectMembersへ変換した後に呼ぶ）
 export async function markPendingInvitationConsumed(id) {
   const rows = await getAllPendingInvitationRows();

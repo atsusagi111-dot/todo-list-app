@@ -28,6 +28,7 @@ import {
   markNotificationRead,
   postComment,
   removeMember,
+  resendInvitation,
   respondToInvitation,
   updateTodoAssignee,
 } from '../projectsApi';
@@ -165,6 +166,21 @@ function ProjectsPage() {
       );
       setInviteEmail('');
       await loadProject(selectedProjectId);
+    } catch (error) {
+      setInviteMessage(error.message);
+    }
+  };
+
+  const handleResendInvitation = async (email) => {
+    if (!selectedProjectId) return;
+    setInviteMessage('');
+    try {
+      const result = await resendInvitation(selectedProjectId, email);
+      setInviteMessage(
+        result.emailWarning
+          ? `${email} 宛に再送信しましたが、メール送信に失敗しました（${result.emailWarning}）`
+          : `${email} 宛に招待メールを再送信しました`
+      );
     } catch (error) {
       setInviteMessage(error.message);
     }
@@ -318,6 +334,7 @@ function ProjectsPage() {
   const unreadCount = notifications.filter((n) => !n.isRead).length;
   const myRole = projectDetail?.myRole;
   const members = projectDetail?.members || [];
+  const pendingInvitations = projectDetail?.pendingInvitations || [];
   const memberById = new Map(members.map((m) => [m.userId, m]));
 
   // 親Todo（parentIdを持たないもの）とサブタスクの階層に組み立てる（既存2画面と同じロジック）
@@ -589,14 +606,46 @@ function ProjectsPage() {
                                       （{member.status === 'joined' ? '参加済み' : '招待中'}）
                                     </span>
                                   </span>
-                                  <button
-                                    onClick={() => handleRemoveMember(member.userId)}
-                                    className="text-slate-400 hover:text-error-600"
-                                  >
-                                    削除
-                                  </button>
+                                  <span className="flex items-center gap-2">
+                                    {member.status === 'invited' && (
+                                      <button
+                                        onClick={() => handleResendInvitation(member.email)}
+                                        className="text-brand-600 hover:text-brand-700"
+                                      >
+                                        再送信
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleRemoveMember(member.userId)}
+                                      className="text-slate-400 hover:text-error-600"
+                                    >
+                                      削除
+                                    </button>
+                                  </span>
                                 </li>
                               ))}
+                          </ul>
+                        )}
+
+                        {pendingInvitations.length > 0 && (
+                          <ul className="mt-3 space-y-1">
+                            {pendingInvitations.map((invitation) => (
+                              <li
+                                key={invitation.email}
+                                className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-1.5 text-xs"
+                              >
+                                <span className="text-slate-600">
+                                  {invitation.email}
+                                  <span className="ml-1.5 text-slate-400">（未登録・招待中）</span>
+                                </span>
+                                <button
+                                  onClick={() => handleResendInvitation(invitation.email)}
+                                  className="text-brand-600 hover:text-brand-700"
+                                >
+                                  再送信
+                                </button>
+                              </li>
+                            ))}
                           </ul>
                         )}
                       </div>

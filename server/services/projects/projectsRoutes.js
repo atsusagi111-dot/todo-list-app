@@ -12,6 +12,7 @@ import {
   listMyInvitations,
   listMyProjects,
   removeMemberFromProject,
+  resendInvitationEmail,
   respondToInvitation,
 } from './projectsService.js';
 import { deleteCommentsForTodos } from '../comments/commentsService.js';
@@ -94,6 +95,22 @@ router.post('/:id/members', async (req, res) => {
     res.status(201).json(invited);
   } catch (error) {
     handleError(res, error, 'メンバーの招待に失敗しました');
+  }
+});
+
+// 招待メールの再送信（オーナーのみ）。会員登録済み・未登録どちらの招待中相手にも使える。
+router.post('/:id/invitations/resend', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || email.trim() === '') {
+      res.status(400).json({ error: 'メールアドレスは必須です' });
+      return;
+    }
+    const appUrl = process.env.CORS_ORIGIN || 'http://localhost:5173';
+    const result = await resendInvitationEmail(req.params.id, req.userId, email.trim(), appUrl);
+    res.json(result);
+  } catch (error) {
+    handleError(res, error, '招待メールの再送信に失敗しました');
   }
 });
 

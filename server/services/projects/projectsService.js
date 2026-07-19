@@ -12,6 +12,7 @@ import {
   findMembersByProject,
   findPendingInvitation,
   findPendingInvitationsByEmail,
+  findPendingInvitationsByProject,
   findProjectById,
   findProjectsByIds,
   markPendingInvitationConsumed,
@@ -195,7 +196,12 @@ export async function getProjectDetail(projectId, userId) {
       status: member.status,
     });
   }
-  return { project, members: memberDetails, myRole: myMembership.role };
+  // まだ会員登録していない相手への招待（登録待ち）も、オーナーが再送信できるよう一覧に含める
+  const pendingInvitations = (await findPendingInvitationsByProject(projectId)).map((inv) => ({
+    email: inv.email,
+    createdAt: inv.createdAt,
+  }));
+  return { project, members: memberDetails, myRole: myMembership.role, pendingInvitations };
 }
 
 // メールアドレスでメンバーを招待する（オーナーのみ）。
@@ -293,6 +299,56 @@ export async function inviteMemberByEmail(projectId, userId, email, appUrl) {
   }
 
   return { ...withDisplayName(targetUser), isRegistered: true, emailWarning };
+}
+
+// 招待メールの再送信（オーナーのみ）。新しい招待は作らず、既存の「招待中」
+// （会員登録済みならProjectMembers、未登録ならPendingInvitations）に対して同じ内容のメールを送り直す。
+export async function resendInvitationEmail(projectId, userId, email, appUrl) {
+  await requireOwnerMembership(projectId, userId);
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const project = await findProjectById(projectId);
+  const inviter = await findUserById(userId);
+  const inviterDisplayName = inviter ? toDisplayName(inviter.email) : '誰か';
+
+  const targetUser = await findUserByEmail(normalizedEmail);
+  let isRegistered;
+  if (targetUser) {
+    const membership = await findMembership(projectId, targetUser.id);
+    if (!membership || membership.status !== 'invited') {
+      const error = new Error('招待中のメンバーが見つかりません');
+      error.status = 404;
+      throw error;
+    }
+    isRegistered = true;
+  } else {
+    const pending = await findPendingInvitation(projectId, normalizedEmail);
+    if (!pending) {
+      const error = new Error('招待が見つかりません');
+      error.status = 404;
+      throw error;
+    }
+    isRegistered = false;
+  }
+
+  let emailWarning = null;
+  try {
+    await sendProjectInvitationEmail({
+      to: normalizedEmail,
+      projectName: project.name,
+      inviterDisplayName,
+      isRegistered,
+      appUrl,
+    });
+  } catch (error) {
+    if (error instanceof EmailConfigError || error instanceof EmailSendError) {
+      emailWarning = error.message;
+    } else {
+      throw error;
+    }
+  }
+
+  return { email: normalizedEmail, emailWarning };
 }
 
 // 会員登録が完了した直後に呼ぶ。そのメールアドレス宛の「登録待ち」招待があれば、
