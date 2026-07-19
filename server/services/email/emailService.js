@@ -23,6 +23,9 @@ function getTransporter() {
     // 465番ポートのみ暗号化接続(SMTPS)。587番などは平文接続後にSTARTTLSで暗号化する。
     secure: Number(SMTP_PORT) === 465,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    // ホスティング環境（Renderなど）はIPv6の経路を持たないことが多く、smtp.gmail.comの
+    // AAAAレコードに接続しようとしてENETUNREACHになるケースがあるため、IPv4接続を強制する。
+    family: 4,
     // ホスティング環境によっては送信ポートがブロックされていることがあるため、
     // 標準のまま（無制限）だと接続がハングし続ける。短めのタイムアウトで打ち切ってエラーにする。
     connectionTimeout: 10000,
